@@ -1,8 +1,15 @@
 #!/usr/bin/env python
 # coding=utf-8
 '''
- Getting Started with Python (tutorial 1)
- https://www.kaggle.com/c/titanic/details/getting-started-with-python
+Here is the code based on the Getting Started with Python Kaggle posts.
+https://www.kaggle.com/c/titanic/details/getting-started-with-python
+
+We present two "models". A simple model that predicts based on Gender and a
+slightly less simple model that uses a lookup table.
+
+The following can be reused:
+- lookup_table: a nice fcn that makes groupbys into lookup tables in 3 lines
+- advanced binning with q_bin, retbins and labels. This allows us to bin one dataset and then apply it to another dataset (note floor and ceiling need to be addressed.)
 '''
 import numpy as np
 import pandas as pd
