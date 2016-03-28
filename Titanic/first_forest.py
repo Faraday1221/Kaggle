@@ -70,6 +70,8 @@ train['SEX'] = train.Sex.map(Sex_dict)
 #===============================================================================
 # Features
 #===============================================================================
+# we could descritize SibSp & Parch and include it, instead FAMILY is our proxy
+
 # Family size Siblings & Spouses + Parents & Children
 # note that we are not looking at the SibSp or Parch individually
 train['Family'] = train.SibSp + train.Parch
@@ -86,16 +88,22 @@ test['FAMILY'] = pd.cut(test.Family, bins=fam_strata, labels=False, include_lowe
 #===============================================================================
 # Reduce to our final Dataset
 #===============================================================================
-# drop anything we don't need
-# we could descritize SibSp & Parch and include it, instead FAMILY is our proxy
+# drop anything we don't need & format as an array
 retain = ['Pclass', 'SEX', 'EMBARKED','FARE', 'AGE', 'FAMILY']
-test = test[retain]
-train = train[retain]
 
-
-# print train.info()
-# print test.info()
+TEST = test[retain].values
+TRAIN= train[retain].values
+CLASSIFIER = train['Survived'].values
 
 #===============================================================================
 # Train a Random forest
 #===============================================================================
+
+# instantiate the forest
+forest = RandomForestClassifier(n_estimators=100)
+# train the forest
+forest = forest.fit(TRAIN, CLASSIFIER)
+# predict the forest
+pred = forest.predict(TEST)
+
+# output for submissionshould be PassengerId then pred values

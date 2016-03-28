@@ -137,3 +137,9 @@ for i in range(test.shape[0]):
 
 # pred is our prediction based on our 'slightly less simple model'
 # ...and thats all folks!
+
+#===============================================================================
+# output format
+#===============================================================================
+'''the output format should be a csv of PassengerId,Survived.
+   see gendermodel.csv for an example'''
