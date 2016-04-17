@@ -130,6 +130,7 @@ include_lowest=True)
 #print test.Price_Bin.head()
 #print train.Price_Bin.head()
 
+# we wrap this in a function below so make the submission a tad easier
 pred = []
 for i in range(test.shape[0]):
     x = (test.iloc[i].Sex, test.iloc[i].Pclass, test.iloc[i].Price_Bin)
@@ -143,3 +144,15 @@ for i in range(test.shape[0]):
 #===============================================================================
 '''the output format should be a csv of PassengerId,Survived.
    see gendermodel.csv for an example'''
+
+def create_submission(df, filename):
+    pred = []
+    for i in range(df.shape[0]):
+        x = (df.iloc[i].Sex, df.iloc[i].Pclass, df.iloc[i].Price_Bin)
+        pred.append(int(survival_dict[x]))
+    submission = pd.DataFrame({
+                    'PassengerId':df['PassengerId'],
+                    'Survived':pred})
+    submission.to_csv(filename, index=False)
+
+create_submission(test,'first_steps.csv')

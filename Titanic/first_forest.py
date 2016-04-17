@@ -96,14 +96,82 @@ TRAIN= train[retain].values
 CLASSIFIER = train['Survived'].values
 
 #===============================================================================
+# Helper Functions
+#===============================================================================
+# modified from Kushal Agarwal
+# https://www.kaggle.com/kushal1412/titanic/random-forest-survivors
+
+'''it would be great to better vizualize these scores, at the default values of
+   range depth (1:100) and estimators (1:300) i suspect we are crazy overfit'''
+
+# from sklearn.ensemble import RandomForestClassifier
+from sklearn.cross_validation import KFold
+
+def best_max_depth(train_data, predictors, target_col):
+    max_score = 0
+    best_m = 0
+    for m in range(1,15):
+        rfc_scr = 0.
+        rfc = RandomForestClassifier(max_depth=m)
+
+        for train, test in KFold(len(train_data), n_folds=10, shuffle=True):
+            X = train_data[predictors].T[train].T
+            y = train_data[target_col].T[train].T
+            rfc.fit(X,y)
+            rfc_scr += rfc.score(X,y)/10
+        if rfc_scr > max_score:
+            max_score = rfc_scr
+            best_m = m
+
+    print 'The best mean accuracy is {1:.2f}%  for max_depth = {0}'.format(best_m, max_score)
+    return best_m
+
+def best_n_estimators(train_data, predictors, target_col):
+    max_score = 0
+    best_n = 0
+    for n in range(1,30):
+        rfc_scr = 0.
+        rfc = RandomForestClassifier(n_estimators=n)
+
+        for train, test in KFold(len(train_data), n_folds=10, shuffle=True):
+            X = train_data[predictors].T[train].T
+            y = train_data[target_col].T[train].T
+            rfc.fit(X,y)
+            rfc_scr += rfc.score(X,y)/10
+        if rfc_scr > max_score:
+            max_score = rfc_scr
+            best_n = n
+    print 'The best mean accuracy is {1:.2f}%  for n_estimators = {0}'.format(best_n, max_score)
+    return best_n
+
+def create_submission(rfc, train, test, predictors, filename):
+    rfc.fit(train[predictors], train["Survived"])
+    predictions = rfc.predict(test[predictors])
+    submission = pd.DataFrame({
+        "PassengerId": test["PassengerId"],
+        "Survived": predictions
+    })
+    submission.to_csv(filename, index=False)
+
+#===============================================================================
 # Train a Random forest
 #===============================================================================
 
-# instantiate the forest
-forest = RandomForestClassifier(n_estimators=100)
-# train the forest
-forest = forest.fit(TRAIN, CLASSIFIER)
-# predict the forest
-pred = forest.predict(TEST)
+m = best_max_depth(train, retain, 'Survived') #69
+n = best_n_estimators(train, retain, 'Survived') # 245
 
-# output for submissionshould be PassengerId then pred values
+# m,n=69,245
+
+rfc = RandomForestClassifier(max_depth=m, n_estimators=n)
+create_submission(rfc, train, test, retain, 'first_forest.csv')
+
+'''it would be fantastic to find a better way to evaluate our model'''
+
+# # instantiate the forest
+# forest = RandomForestClassifier(n_estimators=100)
+# # train the forest
+# forest = forest.fit(TRAIN, CLASSIFIER)
+# # predict the forest
+# pred = forest.predict(TEST)
+#
+# # output for submissionshould be PassengerId then pred values
