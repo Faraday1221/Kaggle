@@ -9,7 +9,7 @@ import pandas as pd
 import numpy as np
 import os
 from pkgs import lookup_table
-
+import re
 # Import the random forest package
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.cross_validation import KFold
@@ -64,6 +64,13 @@ def categorize_titanic(train,test):
     Sex_dict = {'female':0,'male':1}
     test['SEX'] = test.Sex.map(Sex_dict)
     train['SEX'] = train.Sex.map(Sex_dict)
+
+    title_dict={}
+    for i, nm in enumerate(np.unique(train.title)):
+        title_dict[nm]=i
+
+    train['TITLE'] = train.title.map(title_dict)
+    test['TITLE'] = test.title.map(title_dict)
     return train, test
 
 def descritize_titanic(train, test):
@@ -77,11 +84,38 @@ def descritize_titanic(train, test):
     test['AGE'] = pd.cut(test.Age, bins=age_strata, labels=False)
     return train, test
 
+
+def extract_title(series):
+    '''exploit the pattern, last name "," then title "."  '''
+    title = series.apply(lambda x: re.search(r'[a-zA-Z]+\.',x).group())
+    return title
+
+def extract_last(series):
+    '''exploit the pattern, last name "," then title "."  '''
+    last = series.apply(lambda x: x.split(',')[0].strip())
+    return last
+
+def process_title(series,n):
+    '''return only the top titles in the dataset, convert anything lower than
+       counts > n to rare, as an array'''
+    title_counts = series.value_counts()
+    title_list = list(title_counts[title_counts > n].index)
+    title_array = np.where(series.isin(title_list),series,'rare')
+    return title_array
+
 def process_all_titanic(train, test):
     a,b = fill_in_titanic(train,test)
+
+    # set up new features based on the Name field
+    a['title'] = process_title(extract_title(a.Name),5)
+    b['title'] = process_title(extract_title(b.Name),5)
+    a['last'] = extract_last(a.Name)
+    b['last'] = extract_last(b.Name)
+
     a,b = categorize_titanic(a,b)
     a,b = descritize_titanic(a,b)
     return a, b
+
 #===============================================================================
 # Features
 #===============================================================================
@@ -93,7 +127,7 @@ def family_features(train, test):
     train['Family'] = train.SibSp + train.Parch
     test['Family'] = test.SibSp + train.Parch
 
-    fam_strata = [0,1,2,20]
+    fam_strata = [0,1,2,5,20]
     train['FAMILY'] = pd.cut(train.Family, bins=fam_strata, labels=False, include_lowest=True)
     test['FAMILY'] = pd.cut(test.Family, bins=fam_strata, labels=False, include_lowest=True)
 
@@ -171,36 +205,215 @@ if __name__ == "__main__":
     train, test = process_all_titanic(train, test)
     train, test = family_features(train, test)
 
+    #===========================================================================
+    # split train into a train & test set, tune & compare models
+    #===========================================================================
+    from sklearn.cross_validation import train_test_split
+    from sklearn.preprocessing import MinMaxScaler
+    from sklearn.preprocessing import StandardScaler
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.svm import SVC
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.cross_validation import StratifiedKFold
+    from sklearn.pipeline import Pipeline
+    from sklearn.cross_validation import cross_val_score
+    from sklearn.neighbors import KNeighborsClassifier
+
+    retain = ['Pclass','SibSp','Parch','Age',
+              'SEX', 'EMBARKED','FARE', 'AGE', 'FAMILY','TITLE',
+              'MULT_TOP','SUM_TOP']
+
+    x_train,x_test,y_train,y_test = train_test_split(
+                            train[retain].values,
+                            train['Survived'].values,
+                            test_size=0.3,
+                            random_state=0)
+
+    #===========================================================================
+    # Logistic Regression
+    #===========================================================================
+    print 'Logistic Regression'
+    pipe_lr = Pipeline([('scl',MinMaxScaler()),
+                        ('clf',LogisticRegression(random_state=0))])
+    pipe_lr.fit(x_train,y_train)
+    print 'Test Accuracy {0:.3f}'.format(pipe_lr.score(x_test,y_test))
+
+    scores=cross_val_score(estimator=pipe_lr,X=x_train,y=y_train,cv=10,n_jobs=1)
+    print 'CV Accuracy {0:.3f} +/- {1:.3f}'.format(np.mean(scores),np.std(scores))
+
+    #===========================================================================
+    # Random Forrest
+    #===========================================================================
+    '''this appears to have the worst performance of the three models'''
+    print '\nRandom Forest'
+    forest = RandomForestClassifier(random_state=0)
+    forest.fit(x_train,y_train)
+    print 'Test Accuracy {0:.3f}'.format(forest.score(x_test,y_test))
+    scores = cross_val_score(estimator=forest,X=x_train,y=y_train,cv=10,n_jobs=1)
+    print 'CV Accuracy {0:.3f} +/- {1:.3f}'.format(np.mean(scores),np.std(scores))
+
+    #===========================================================================
+    # KNN
+    #===========================================================================
+    # this performs well on the training set, but does not generalize as well
+    # as SVM, thanks cross validation!
+    print '\nKNN'
+    pipe_kn = Pipeline([('scl',StandardScaler()),
+                         ('clf',KNeighborsClassifier())])
+    pipe_kn.fit(x_train,y_train)
+    print 'Test Accuracy {0:.3f}'.format(pipe_kn.score(x_test,y_test))
+
+    scores=cross_val_score(estimator=pipe_kn,X=x_train,y=y_train,cv=10,n_jobs=1)
+    print 'CV Accuracy {0:.3f} +/- {1:.3f}'.format(np.mean(scores),np.std(scores))
+
+    #===========================================================================
+    # SVM
+    #===========================================================================
+    print '\nSVM'
+    pipe_svm = Pipeline([('scl',StandardScaler()),
+                         ('clf',SVC(random_state=0))])
+    pipe_svm.fit(x_train,y_train)
+    print 'Test Accuracy {0:.3f}'.format(pipe_svm.score(x_test,y_test))
+
+    scores=cross_val_score(estimator=pipe_svm,X=x_train,y=y_train,cv=10,n_jobs=1)
+    print 'CV Accuracy {0:.3f} +/- {1:.3f}'.format(np.mean(scores),np.std(scores))
+
+    # create submission
+    create_submission(pipe_svm,train,test,retain,'default_svm.csv')
+
+    #===========================================================================
+    # Sequential Feature Selection
+    #===========================================================================
+    '''THIS IS STILL BROKEN...'''
+    # import pkgs
+    # pipe_svm = Pipeline([('scl',StandardScaler()),
+    #                      ('clf',SVC(random_state=0))])
+    # print '\nRunning SBS...'
+    # sbs = pkgs.SBS(pipe_svm, k_features=1)
+    # sbs.fit(x_train, y_train)
+    # print 'Complete.'
+    #
+    # print 'Lets try the plot...'
+    # # plot the Accuracy vs Number of Features
+    # import matplotlib.pyplot as plt
+    # k_feat = [len(k) for k in sbs.subsets_]
+    # plt.plot(k_feat, sbs.scores_,marker='o')
+    # # plt.ylim
+    # plt.ylabel('Accuracy')
+    # plt.xlabel('Number of features')
+    # plt.grid()
+    # plt.show()
+
+    #===========================================================================
+    # Reviewing the SVM Validation Curve (check overfitting)
+    #===========================================================================
+    from sklearn.learning_curve import validation_curve
+    import matplotlib.pyplot as plt
+    param_range = [0.0001, 0.001, 0.01, 0.1, 1, 10.0, 100.0, 1000.0]
+
+    train_scores,test_scores = validation_curve(
+        estimator = pipe_svm, X=x_train, y=y_train, param_name='clf__C',
+        param_range=param_range, cv=10)
+
+    train_mean = np.mean(train_scores, axis=1)
+    train_std = np.std(train_scores, axis=1)
+    test_mean = np.mean(test_scores, axis=1)
+    test_std = np.std(test_scores, axis=1)
+
+    plt.plot(param_range, train_mean, color='blue', marker='o', markersize=5,
+             label='training_accuracy')
+    plt.fill_between(param_range, train_mean + train_std, train_mean-train_std,
+             alpha=0.15, color='blue')
+    plt.plot(param_range, test_mean, color='green', marker='s', markersize=5,
+             linestyle='--', label='training_accuracy')
+    plt.fill_between(param_range, test_mean + test_std, test_mean - test_std,
+             alpha=0.15, color='green')
+
+    plt.grid()
+    plt.xscale('log')
+    plt.legend(loc='best')
+    plt.xlabel('Parameter C')
+    plt.ylabel('Accuracy')
+    # plt.ylim([0.8, 1.0])
+    plt.show()
+
+    #===========================================================================
+    # Checking Parameter Importance
+    #===========================================================================
+    '''it would be good to try SBS here if we can use it with SVM (else KNN p.121)'''
+    '''otherwise the RandomForest is a way to check importance (p.125)'''
+    '''it seems strange to me that we have to use other models to investigate
+       how important a feature is'''
+
+    #===========================================================================
+    # Tuning our model with GridSearch (p.186)
+    #===========================================================================
+    '''commenting this out because it is a resource suck'''
+    # note we are using the pipe_svm and param_range from the proceeding code
+    # spoiler alert: since our default SVM performed so well, we do not see
+    # much deviation from our default values, nor improved score
+    # in fact, they both make exactly the same predictions!
+
+    # from sklearn.grid_search import GridSearchCV
+    #
+    # print '\nTuning the SVM model with Grid Search'
+    # param_grid = [{'clf__C': param_range,
+    #                 'clf__kernel':['linear']},
+    #               {'clf__C': param_range,
+    #                 'clf__gamma': param_range,
+    #                 'clf__kernel': ['rbf']}]
+    # gs = GridSearchCV(estimator=pipe_svm, param_grid=param_grid,
+    #                     scoring='accuracy', cv=10, n_jobs=-1)
+    # gs = gs.fit(x_train,y_train)
+    # print gs.best_score_
+    # print gs.best_params_
+    #
+    # # we can use the suggested parameters above to implement the tuned model
+    # clf = gs.best_estimator_
+    # clf.fit(x_train,y_train)
+    # print 'Test Accuracy {0:.3f}'.format(clf.score(x_test,y_test))
+
+    # create submission
+    # create_submission(clf,train,test,retain,'gridsearch_svm.csv')
+
+
+
+
+   #===========================================================================
+   # Old Code
+   #===========================================================================
+
     # drop anything we don't need & format as an array
-    retain = ['Pclass', 'SEX', 'EMBARKED','FARE', 'AGE', 'FAMILY']
+    # retain = ['Pclass', 'SEX', 'EMBARKED','FARE', 'AGE', 'FAMILY','TITLE']
 
-    print 'Finding the best max_depth...'
-    m = best_max_depth(train, retain, 'Survived') #69
-    print 'Finding the best n_estimators...'
-    n = best_n_estimators(train, retain, 'Survived') # 245
-
-    rfc = RandomForestClassifier(max_depth=m, n_estimators=n)
-    print 'Creating submission...'
-    create_submission(rfc, train, test, retain, 'first_forest.csv')
-    print 'Complete.'
-
-
-    '''it would be fantastic to find a better way to evaluate our model'''
+    # print 'Finding the best max_depth...'
+    # m = best_max_depth(train, retain, 'Survived') #69
+    # print 'Finding the best n_estimators...'
+    # n = best_n_estimators(train, retain, 'Survived') # 245
+    #
+    # rfc = RandomForestClassifier(max_depth=m, n_estimators=n)
+    # print 'Creating submission...'
+    # create_submission(rfc, train, test, retain, 'first_forest.csv')
+    # print 'Complete.'
 
 
-#===============================================================================
-# The first attempt at a Random Forest
-#===============================================================================
+    '''it would be fantastic to find a better way to evaluate our model...
+       this is addressed above :) '''
 
-# TEST = test[retain].values
-# TRAIN= train[retain].values
-# CLASSIFIER = train['Survived'].values
-#
-# # instantiate the forest
-# forest = RandomForestClassifier(n_estimators=100)
-# # train the forest
-# forest = forest.fit(TRAIN, CLASSIFIER)
-# # predict the forest
-# pred = forest.predict(TEST)
-#
-# # output for submissionshould be PassengerId then pred values
+
+    #===========================================================================
+    # The first attempt at a Random Forest
+    #===========================================================================
+
+    # TEST = test[retain].values
+    # TRAIN= train[retain].values
+    # CLASSIFIER = train['Survived'].values
+    #
+    # # instantiate the forest
+    # forest = RandomForestClassifier(n_estimators=100)
+    # # train the forest
+    # forest = forest.fit(TRAIN, CLASSIFIER)
+    # # predict the forest
+    # pred = forest.predict(TEST)
+    #
+    # # output for submissionshould be PassengerId then pred values
