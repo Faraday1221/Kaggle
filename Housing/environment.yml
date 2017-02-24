@@ -7,5 +7,6 @@ dependencies:
     - seaborn=0.7.1
     - theano=0.8.2
     - ipython
+    - jupyter
     - pip:
         - keras==1.2
