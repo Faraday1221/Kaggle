@@ -135,7 +135,7 @@ class RandomForest(FeatureScoresRegression):
 
     def _feature_importance(self):
         s = pd.DataFrame([self.clf.feature_importances_,self.X.columns]).T
-        s.columns = ['coef','features']
+        s.columns = ['coef','feature']
         return s.sort_values('coef',ascending=False)
 
 #===============================================================================
