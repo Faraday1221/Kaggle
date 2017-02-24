@@ -119,18 +119,18 @@ def adjust_skew(df, thresh=0.75):
     #log transform skewed numeric features:
     numeric_feats = df.dtypes[df.dtypes != "object"].index
     #compute skewness
-    skewed_feats = train[numeric_feats].apply(lambda x: skew(x.dropna()))
+    skewed_feats = df[numeric_feats].apply(lambda x: skew(x.dropna()))
     skewed_feats = skewed_feats[skewed_feats > thresh]
     skewed_feats = skewed_feats.index
 
     # the approach above needs a bit of tweaking based on our featureset which
     # contains binary indicators as well as categorical mapped to ordinal data
     # in those instances we will simply exclude those columns
-    exclude = ['HasShed','PoolQC','MSSubClass','ExterQual','ExterCond','Fence']
+    exclude = ['HasShed','PoolQC','ExterQual','ExterCond','Fence']
     skewed_feats = skewed_feats.drop(exclude)
 
     # log(feature + 1) transform to normalize skew
-    df[skewed_feats] = np.log1p(all_data[skewed_feats])
+    df[skewed_feats] = np.log1p(df[skewed_feats])
 
     return df
 
@@ -258,7 +258,7 @@ def feature_eng_01(train,test):
     df = generate_featues(df)
     df = fill_na_one(df)
 
-    train, test = extract_test_train(df)
+    train, test = extract_test_train(df,train,test)
     return train,test
 
 
@@ -276,9 +276,10 @@ def feature_eng_02(train,test):
     df = adjust_skew(df)
     # handle nulls simply - most freq for object & mean for num
     df = handle_object_nulls(df)
-    df = df.fillna(np.mean())
+    df = df.fillna(df.mean())
+    df = pd.get_dummies(df)
 
-    train, test = extract_test_train(df)
+    train, test = extract_test_train(df,train,test)
     return train, test
 
 
