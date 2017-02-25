@@ -21,6 +21,7 @@ what do we need to see as an output?
 """
 # idea for a follow up (this is already kind of started): have a quick stats check and visualization for features as well i.e. description / skew / correlation. essentially we should be able to easily check all the assumptions for a linear model
 from __future__ import print_function
+import abc
 
 import numpy as np
 import pandas as pd
@@ -40,6 +41,7 @@ from sklearn.model_selection import GridSearchCV
 
 
 class FeatureScoresRegression(object):
+    __metaclass__ = abc.ABCMeta
     def __init__(self,X,y,cv=5,scoring='neg_mean_squared_error'):
         self.X = X
         self.y = y
@@ -53,9 +55,10 @@ class FeatureScoresRegression(object):
         self.inlcuded_features = self._include_exclude(include=True)
         self.excluded_features = self._include_exclude(include=False)
 
+    @abc.abstractmethod
     def _get_clf(self):
-        # pass
-        return LinearRegression().fit(self.X,self.y)
+        pass
+        # return LinearRegression().fit(self.X,self.y)
 
     def _calculate_score(self):
         rmse = np.sqrt(-cross_val_score(self.clf,X=self.X,y=self.y,
@@ -108,6 +111,7 @@ class LinearL1(FeatureScoresRegression):
     def __init__(self,X,y):
         self.name = 'Lasso or L1 Linear Regression with light GridSearch alpha.'
         super(LinearL1,self).__init__(X,y)
+
     def _get_clf(self):
         clf = LassoCV(alphas=[.001,.01,.1,1.,10.,100.],
                         random_state=self.random_state,
@@ -119,10 +123,6 @@ class RandomForest(FeatureScoresRegression):
     def __init__(self,X,y):
         self.name = 'RandomForest with light GridSearch for the Forest Params'
         super(RandomForest,self).__init__(X,y)
-        self.clf = self._get_clf()
-        self.rmse = self._calculate_score()
-        self.feature_scores = self._feature_importance()
-
 
     def _get_clf(self):
         params = {  'n_estimators': [10,100],
@@ -164,84 +164,3 @@ def feature_importance_regression(X,y,N=10):
     for model in [a,b,c]:
         model.summary(N)
     return a,b,c
-
-#===============================================================================
-# Original Implementation
-#===============================================================================
-
-# class FeatureScoresRegression(object):
-#     def __init__(self,X,y,cv=5,scoring='neg_mean_squared_error'):
-#         self.X = X
-#         self.y = y
-#         self.cv = cv
-#         self.scoring = scoring
-#         self.random_state = 0
-#
-#     def _get_clf(self):
-#         return LinearRegression().fit(self.X,self.y)
-#
-#     def _calculate_score(self,clf):
-#         rmse = np.sqrt(-cross_val_score(clf,X=self.X,y=self.y,
-#                         cv=self.cv,scoring=self.scoring))
-#         return np.mean(rmse)
-#
-#     # def feature_names(self,X):
-#     #     # make a dict of the feature names by position in X
-#     #     return {i:name for i,name in enumerate(X.columns)}
-#
-#     def _feature_importance(self,clf):
-#         s = pd.DataFrame([clf.coef_,self.X.columns]).T
-#         s.columns = ['coef','feature',]
-#         return s.sort_values('coef',ascending=False)
-#
-#
-# class Linear(FeatureScoresRegression):
-#     def __init__(self,X,y):
-#         self.name = 'Linear'
-#         super(Linear,self).__init__(X,y)
-#         self.clf = LinearRegression().fit(X,y)
-#         self.rmse = self._calculate_score(self.clf)
-#         self.score = self._feature_importance(self.clf)
-#
-#     def feature_score(self):
-#         return self._feature_importance(self.clf)
-#
-# class LinearL1(FeatureScoresRegression):
-#     def __init__(self,X,y):
-#         self.name = 'Lasso'
-#         super(LinearL1,self).__init__(X,y)
-#         self.clf = LassoCV(alphas=[.001,.01,.1,1.,10.,100.],
-#                            random_state=self.random_state,cv=self.cv).fit(X,y)
-#         self.rmse = self._calculate_score(self.clf)
-#         self.score = self._feature_importance(self.clf)
-#
-#     def feature_score(self):
-#         return self._feature_importance(self.clf)
-#
-#
-#
-# class RandomForest(FeatureScoresRegression):
-#     def __init__(self,X,y):
-#         self.name = 'RandomForest'
-#         super(RandomForest,self).__init__(X,y)
-#         self.clf = self._GS_clf(X,y)
-#         self.rmse = self._calculate_score(self.clf)
-#         self.score = self._feature_importance(self.clf)
-#
-#     def feature_score(self):
-#         return self._feature_importance(self.clf)
-#
-#
-#     def _feature_importance(self):
-#         s = pd.DataFrame([self.clf.feature_importances_,self.X.columns]).T
-#         s.columns = ['coefs','features']
-#         return s.sort_values('coef',ascending=False)
-#
-#     def _GS_clf(self,X,y):
-#         params = {  'n_estimators': [10,100],
-#                     'max_depth': [5,20,None],
-#                     'min_samples_split':[2]}
-#         clf = RandomForestRegressor(random_state=self.random_state)
-#         cv = GridSearchCV(estimator=clf,param_grid=params,
-#                           scoring=self.scoring,cv=self.cv).fit(X,y)
-#         return cv.best_estimator_
